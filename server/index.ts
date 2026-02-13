@@ -86,7 +86,7 @@ app.post('/api/leaderboard', (req, res) => {
 // --- Catch-all: serve index.html for client-side routing ---
 
 if (existsSync(DIST_DIR)) {
-  app.get('*', (_req, res) => {
+  app.get('/{*splat}', (_req, res) => {
     res.sendFile(join(DIST_DIR, 'index.html'));
   });
 }
