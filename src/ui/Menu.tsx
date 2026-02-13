@@ -7,7 +7,7 @@ interface MenuProps {
 
 export function Menu({ onStart }: MenuProps) {
   const [name, setName] = useState('');
-  const [selectedColor, setSelectedColor] = useState(CAR_COLORS[0].hex);
+  const [selectedColor, setSelectedColor] = useState<string>(CAR_COLORS[0].hex);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
