@@ -5,9 +5,94 @@ import {
   createRoadGeometry,
   createEdgePoints,
   createCurbGeometry,
+  getCheckpointTs,
   TRACK_CURVE,
   TRACK_WIDTH,
 } from './trackPath';
+
+function CheckpointMarkers() {
+  const markers = useMemo(() => {
+    const cpTs = getCheckpointTs();
+    return cpTs.map((t, idx) => {
+      const point = TRACK_CURVE.getPointAt(t);
+      const tangent = TRACK_CURVE.getTangentAt(t);
+      const flatTan = new THREE.Vector3(tangent.x, 0, tangent.z).normalize();
+      const perp = new THREE.Vector3(-flatTan.z, 0, flatTan.x);
+      const rotation = Math.atan2(flatTan.x, flatTan.z);
+
+      // Stripe across the road
+      const stripePos: [number, number, number] = [
+        point.x,
+        point.y + 0.08,
+        point.z,
+      ];
+
+      // Two posts on each side of the road
+      const postHeight = 5;
+      const leftPost: [number, number, number] = [
+        point.x + perp.x * (TRACK_WIDTH / 2 + 0.5),
+        point.y + postHeight / 2,
+        point.z + perp.z * (TRACK_WIDTH / 2 + 0.5),
+      ];
+      const rightPost: [number, number, number] = [
+        point.x - perp.x * (TRACK_WIDTH / 2 + 0.5),
+        point.y + postHeight / 2,
+        point.z - perp.z * (TRACK_WIDTH / 2 + 0.5),
+      ];
+
+      // Banner across the top
+      const bannerPos: [number, number, number] = [
+        point.x,
+        point.y + postHeight,
+        point.z,
+      ];
+
+      return { stripePos, leftPost, rightPost, bannerPos, rotation, postHeight, idx };
+    });
+  }, []);
+
+  return (
+    <group>
+      {markers.map((m) => (
+        <group key={m.idx}>
+          {/* Road stripe */}
+          <mesh position={m.stripePos} rotation={[0, m.rotation, 0]}>
+            <boxGeometry args={[TRACK_WIDTH, 0.04, 1.2]} />
+            <meshStandardMaterial
+              color="#ffaa00"
+              emissive="#ffaa00"
+              emissiveIntensity={0.3}
+              transparent
+              opacity={0.7}
+            />
+          </mesh>
+
+          {/* Left post */}
+          <mesh position={m.leftPost}>
+            <cylinderGeometry args={[0.2, 0.2, m.postHeight, 8]} />
+            <meshStandardMaterial color="#ff6600" />
+          </mesh>
+
+          {/* Right post */}
+          <mesh position={m.rightPost}>
+            <cylinderGeometry args={[0.2, 0.2, m.postHeight, 8]} />
+            <meshStandardMaterial color="#ff6600" />
+          </mesh>
+
+          {/* Banner across the top */}
+          <mesh position={m.bannerPos} rotation={[0, m.rotation, 0]}>
+            <boxGeometry args={[TRACK_WIDTH + 1, 0.8, 0.15]} />
+            <meshStandardMaterial
+              color="#ff6600"
+              emissive="#ff6600"
+              emissiveIntensity={0.2}
+            />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
 
 export function Track() {
   const roadGeometry = useMemo(() => createRoadGeometry(), []);
@@ -22,8 +107,9 @@ export function Track() {
     const tangent = TRACK_CURVE.getTangentAt(0);
     const rotation = Math.atan2(tangent.x, tangent.z);
     return {
-      position: [point.x, 0.07, point.z] as [number, number, number],
+      position: [point.x, point.y + 0.07, point.z] as [number, number, number],
       rotation,
+      y: point.y,
     };
   }, []);
 
@@ -46,7 +132,7 @@ export function Track() {
           .add(tangent.clone().multiplyScalar(forwardOffset));
         const isWhite = (row + col) % 2 === 0;
         boxes.push({
-          position: [pos.x, 0.07, pos.z],
+          position: [pos.x, startLine.y + 0.07, pos.z],
           color: isWhite ? '#ffffff' : '#111111',
         });
       }
@@ -77,8 +163,10 @@ export function Track() {
       <Line
         points={useMemo(() => {
           const pts: THREE.Vector3[] = [];
-          for (let i = 0; i <= 200; i++) {
-            pts.push(TRACK_CURVE.getPointAt(i / 200).setY(0.07));
+          for (let i = 0; i <= 400; i++) {
+            const p = TRACK_CURVE.getPointAt(i / 400);
+            p.y += 0.07;
+            pts.push(p);
           }
           return pts;
         }, [])}
@@ -102,6 +190,9 @@ export function Track() {
           <meshStandardMaterial color={box.color} />
         </mesh>
       ))}
+
+      {/* Checkpoint markers */}
+      <CheckpointMarkers />
     </group>
   );
 }

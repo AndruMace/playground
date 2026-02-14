@@ -3,6 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Sky } from '@react-three/drei';
 import * as THREE from 'three';
 import { Track } from './Track';
+import { getNearestTrackInfo, TRACK_WIDTH, getCheckpointTs, TRACK_CURVE } from './trackPath';
 import { PlayerController, RAMP } from './PlayerController';
 import type { AimScreen } from './PlayerController';
 import { RemoteCar } from './RemoteCar';
@@ -308,14 +309,20 @@ function Trees() {
       let x = Math.sin(seed) * 10000;
       return x - Math.floor(x);
     };
-    for (let i = 0; i < 80; i++) {
+    const minClearance = TRACK_WIDTH * 1.5; // keep trees well away from track edges
+    const tmpV = new THREE.Vector3();
+    for (let i = 0; i < 400; i++) {
       const angle = rng(i * 17.3) * Math.PI * 2;
-      const radius = 120 + rng(i * 31.7) * 100;
+      const radius = 130 + rng(i * 31.7) * 220;
+      const x = Math.cos(angle) * radius;
+      const z = Math.sin(angle) * radius;
+      // Skip trees that are too close to any part of the track
+      tmpV.set(x, 0, z);
+      const info = getNearestTrackInfo(tmpV);
+      if (info.distance < minClearance) continue;
       const scale = 0.7 + rng(i * 47.1) * 0.6;
-      result.push({
-        pos: [Math.cos(angle) * radius, 0, Math.sin(angle) * radius],
-        s: scale,
-      });
+      if (result.length >= 200) break;
+      result.push({ pos: [x, 0, z], s: scale });
     }
     return result;
   }, []);
@@ -447,11 +454,11 @@ export function GameScene({
             castShadow
             shadow-mapSize-width={2048}
             shadow-mapSize-height={2048}
-            shadow-camera-far={400}
-            shadow-camera-left={-200}
-            shadow-camera-right={200}
-            shadow-camera-top={200}
-            shadow-camera-bottom={-200}
+            shadow-camera-far={600}
+            shadow-camera-left={-300}
+            shadow-camera-right={300}
+            shadow-camera-top={300}
+            shadow-camera-bottom={-300}
           />
           <hemisphereLight args={['#87ceeb', '#2d5a1e', 0.3]} />
 
@@ -470,7 +477,7 @@ export function GameScene({
             position={[0, -0.02, 0]}
             receiveShadow
           >
-            <planeGeometry args={[800, 800]} />
+            <planeGeometry args={[1600, 1600]} />
             <meshStandardMaterial color="#2d6b1e" roughness={0.95} />
           </mesh>
 

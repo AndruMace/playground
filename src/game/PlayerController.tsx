@@ -10,6 +10,7 @@ import {
   isOnTrack,
   getCheckpointTs,
   getStartPosition,
+  getTrackElevation,
   TOTAL_LAPS,
   TRACK_WIDTH,
 } from './trackPath';
@@ -24,14 +25,14 @@ const WALK = {
 };
 
 const DRIVE = {
-  maxSpeed: 60,
-  acceleration: 32,
-  braking: 50,
-  reverseMax: 15,
+  maxSpeed: 90,
+  acceleration: 40,
+  braking: 55,
+  reverseMax: 18,
   friction: 0.985,
   turnSpeed: 2.2,
   grassFriction: 0.978,
-  grassMaxSpeed: 50,
+  grassMaxSpeed: 65,
 };
 
 const FLY = {
@@ -82,13 +83,13 @@ const COLLISION_BOUNCE = 0.6; // how much speed transfers on impact
 // ── Ramp definition ────────────────────────────────────────────────
 
 export const RAMP = {
-  // Off-track stunt area north of the main track
-  x: 0,
-  z: 100,
+  // Off-track stunt area, east of the track near the start
+  x: 130,
+  z: 200,
   width: 14,      // side-to-side
   length: 20,     // along the slope direction
   height: 3.5,    // peak height at the far edge
-  rotation: 0,    // slope rises toward +Z (away from the track)
+  rotation: Math.PI / 2, // slope rises toward +X
 };
 
 // Max height change the car/player can step up per frame (prevents wall-climbing)
@@ -135,6 +136,7 @@ interface VehicleState {
 
 function makeVehicles(): VehicleState[] {
   const start = getStartPosition();
+  const sy = start.position.y - 0.5; // base track elevation at start
   return [
     // ── Cars ──
     {
@@ -142,7 +144,7 @@ function makeVehicles(): VehicleState[] {
       type: 'car',
       label: 'Red Racer',
       color: '#e63946',
-      pos: new THREE.Vector3(start.position.x + 12, 0, start.position.z + 10),
+      pos: new THREE.Vector3(start.position.x + 12, sy, start.position.z + 10),
       rot: start.rotation,
       speed: 0,
       pitch: 0,
@@ -152,7 +154,7 @@ function makeVehicles(): VehicleState[] {
       type: 'car',
       label: 'Blue Bolt',
       color: '#457b9d',
-      pos: new THREE.Vector3(start.position.x + 12, 0, start.position.z + 16),
+      pos: new THREE.Vector3(start.position.x + 12, sy, start.position.z + 16),
       rot: start.rotation,
       speed: 0,
       pitch: 0,
@@ -162,7 +164,7 @@ function makeVehicles(): VehicleState[] {
       type: 'car',
       label: 'Green Machine',
       color: '#2a9d8f',
-      pos: new THREE.Vector3(start.position.x + 12, 0, start.position.z + 22),
+      pos: new THREE.Vector3(start.position.x + 12, sy, start.position.z + 22),
       rot: start.rotation,
       speed: 0,
       pitch: 0,
@@ -172,7 +174,7 @@ function makeVehicles(): VehicleState[] {
       type: 'car',
       label: 'Orange Fury',
       color: '#e76f51',
-      pos: new THREE.Vector3(start.position.x + 18, 0, start.position.z + 10),
+      pos: new THREE.Vector3(start.position.x + 18, sy, start.position.z + 10),
       rot: start.rotation,
       speed: 0,
       pitch: 0,
@@ -183,8 +185,8 @@ function makeVehicles(): VehicleState[] {
       type: 'airplane',
       label: 'Sky Hawk',
       color: '#4488cc',
-      pos: new THREE.Vector3(0, FLY.groundY, -10),
-      rot: Math.PI / 2,
+      pos: new THREE.Vector3(start.position.x + 25, FLY.groundY, start.position.z),
+      rot: start.rotation,
       speed: 0,
       pitch: 0,
     },
@@ -193,8 +195,8 @@ function makeVehicles(): VehicleState[] {
       type: 'airplane',
       label: 'Red Baron',
       color: '#cc3333',
-      pos: new THREE.Vector3(15, FLY.groundY, -10),
-      rot: Math.PI / 2,
+      pos: new THREE.Vector3(start.position.x + 25, FLY.groundY, start.position.z + 10),
+      rot: start.rotation,
       speed: 0,
       pitch: 0,
     },
@@ -203,8 +205,8 @@ function makeVehicles(): VehicleState[] {
       type: 'airplane',
       label: 'Golden Eagle',
       color: '#d4a017',
-      pos: new THREE.Vector3(-15, FLY.groundY, -10),
-      rot: Math.PI / 2,
+      pos: new THREE.Vector3(start.position.x + 25, FLY.groundY, start.position.z + 20),
+      rot: start.rotation,
       speed: 0,
       pitch: 0,
     },
@@ -502,12 +504,12 @@ export function PlayerController({
     }
 
     // Ramp surface — walk up the slope but block the wall
-    const walkRampH = getRampHeight(charPos.current.x, charPos.current.z);
+    const walkRampH = getGroundHeight(charPos.current.x, charPos.current.z);
     if (walkRampH - charPos.current.y > MAX_STEP_UP) {
       // Wall — push back
       charPos.current.x -= (moveLen > 0.001 ? (moveX / moveLen) : 0) * baseSpeed * dt;
       charPos.current.z -= (moveLen > 0.001 ? (moveZ / moveLen) : 0) * baseSpeed * dt;
-      charPos.current.y = getRampHeight(charPos.current.x, charPos.current.z);
+      charPos.current.y = getGroundHeight(charPos.current.x, charPos.current.z);
     } else {
       charPos.current.y = walkRampH;
     }
@@ -610,7 +612,7 @@ export function PlayerController({
     v.pos.z += Math.cos(v.rot) * v.speed * dt;
 
     // ── Vertical physics: ramp + jump + gravity ──
-    const groundLevel = getRampHeight(v.pos.x, v.pos.z);
+    const groundLevel = getGroundHeight(v.pos.x, v.pos.z);
 
     if (carOnGround.current) {
       const prevY = v.pos.y;
@@ -937,27 +939,31 @@ export function PlayerController({
     }
   }
 
-  // ── Ramp height query ──────────────────────────────────────────────
+  // ── Ground height query (track elevation + ramp) ─────────────────
 
-  function getRampHeight(x: number, z: number): number {
-    // Transform world position into ramp-local coordinates
+  const _tmpGroundPos = new THREE.Vector3();
+
+  function getGroundHeight(x: number, z: number): number {
+    // Track elevation
+    _tmpGroundPos.set(x, 0, z);
+    const trackY = getTrackElevation(_tmpGroundPos);
+
+    // Ramp height (additive on top of whatever the base ground is)
+    let rampY = 0;
     const lx = x - RAMP.x;
     const lz = z - RAMP.z;
-
-    // Inverse Y-rotation: world → local  (use cos(θ), sin(θ) not negated)
     const cosR = Math.cos(RAMP.rotation);
     const sinR = Math.sin(RAMP.rotation);
-    const rx = lx * cosR - lz * sinR;   // local lateral
-    const rz = lx * sinR + lz * cosR;   // local longitudinal (slope dir)
-
-    // Check bounds
+    const rx = lx * cosR - lz * sinR;
+    const rz = lx * sinR + lz * cosR;
     const halfW = RAMP.width / 2;
     const halfL = RAMP.length / 2;
-    if (rx < -halfW || rx > halfW || rz < -halfL || rz > halfL) return 0;
+    if (rx >= -halfW && rx <= halfW && rz >= -halfL && rz <= halfL) {
+      const t = (rz + halfL) / RAMP.length;
+      rampY = t * RAMP.height;
+    }
 
-    // Height ramps up linearly from back edge to front edge
-    const t = (rz + halfL) / RAMP.length; // 0 at back, 1 at front
-    return t * RAMP.height;
+    return Math.max(trackY, rampY);
   }
 
   // ── Muzzle flash timer ────────────────────────────────────────────
@@ -982,10 +988,12 @@ export function PlayerController({
       0,
       Math.sin(v.rot) * 4,
     );
-    charPos.current.set(v.pos.x + side.x, 0, v.pos.z + side.z);
+    const exitX = v.pos.x + side.x;
+    const exitZ = v.pos.z + side.z;
+    charPos.current.set(exitX, getGroundHeight(exitX, exitZ), exitZ);
     charRot.current = v.rot;
     v.speed = 0;
-    v.pos.y = 0;
+    v.pos.y = getGroundHeight(v.pos.x, v.pos.z);
     activeIdx.current = null;
     race.current.active = false;
     modeRef.current = 'walking';
