@@ -3,7 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Sky } from '@react-three/drei';
 import * as THREE from 'three';
 import { Track } from './Track';
-import { getNearestTrackInfo, TRACK_WIDTH, getCheckpointTs, TRACK_CURVE } from './trackPath';
+import { getNearestTrackInfo, TRACK_WIDTH } from './trackPath';
 import { PlayerController, RAMP } from './PlayerController';
 import type { AimScreen } from './PlayerController';
 import { RemoteCar } from './RemoteCar';
